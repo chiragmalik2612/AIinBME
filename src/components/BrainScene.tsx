@@ -359,12 +359,12 @@ function BrainMeshGroup({
 
       {showLabels && showHotspot && (
         <Html position={hotspotPinPos} center distanceFactor={0.35} zIndexRange={[20, 0]}>
-          <div className="pointer-events-none select-none flex items-center gap-2 bg-slate-950/90 border border-cyan-400/80 text-cyan-200 px-2.5 py-1 rounded-full shadow-[0_0_20px_rgba(0,224,255,0.45)] backdrop-blur-md whitespace-nowrap">
+          {/* <div className="pointer-events-none select-none flex items-center gap-2 bg-slate-950/90 border border-cyan-400/80 text-cyan-200 px-2.5 py-1 rounded-full shadow-[0_0_20px_rgba(0,224,255,0.45)] backdrop-blur-md whitespace-nowrap">
             <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
             <span className="text-[11px] font-semibold tracking-wide">
               Predicted Seizure Zone
             </span>
-          </div>
+          </div> */}
         </Html>
       )}
     </>
