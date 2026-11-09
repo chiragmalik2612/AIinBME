@@ -39,10 +39,12 @@ function CameraRig({
   hotspotLocalCenter: THREE.Vector3;
   controlsRef: React.RefObject<OrbitControlsImpl | null>;
 }) {
-  const { camera } = useThree();
+  const { camera, size } = useThree();
 
   useEffect(() => {
-    const dist = 0.26;
+    // Pull camera slightly further back on narrow portrait mobile screens
+    const isPortraitMobile = size.width < 640;
+    const dist = isPortraitMobile ? 0.33 : 0.26;
     const target = new THREE.Vector3(0, 0, 0);
     const pos = new THREE.Vector3(0, 0.06, dist);
 
@@ -66,14 +68,18 @@ function CameraRig({
         target.copy(hotspotLocalCenter);
         pos.copy(hotspotLocalCenter).add(
           new THREE.Vector3(
-            hotspotLocalCenter.x <= 0 ? -0.11 : 0.11,
+            hotspotLocalCenter.x <= 0 ? -0.12 : 0.12,
             0.05,
-            0.11
+            0.12
           )
         );
         break;
       default:
-        pos.set(-0.16, 0.1, 0.21);
+        pos.set(
+          isPortraitMobile ? -0.2 : -0.16,
+          0.1,
+          isPortraitMobile ? 0.26 : 0.21
+        );
         break;
     }
 
@@ -82,7 +88,7 @@ function CameraRig({
       controlsRef.current.target.copy(target);
       controlsRef.current.update();
     }
-  }, [cameraPreset, hotspotLocalCenter, camera, controlsRef]);
+  }, [cameraPreset, hotspotLocalCenter, camera, controlsRef, size.width]);
 
   return null;
 }
@@ -95,7 +101,6 @@ function BrainMeshGroup({
   wireframe,
   pulseHotspot,
   hotspotGlow,
-  showLabels,
   sliceAxis,
   slicePosition,
   cortexColor,
@@ -356,17 +361,6 @@ function BrainMeshGroup({
           distance={0.18}
         />
       )}
-
-      {showLabels && showHotspot && (
-        <Html position={hotspotPinPos} center distanceFactor={0.35} zIndexRange={[20, 0]}>
-          {/* <div className="pointer-events-none select-none flex items-center gap-2 bg-slate-950/90 border border-cyan-400/80 text-cyan-200 px-2.5 py-1 rounded-full shadow-[0_0_20px_rgba(0,224,255,0.45)] backdrop-blur-md whitespace-nowrap">
-            <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
-            <span className="text-[11px] font-semibold tracking-wide">
-              Predicted Seizure Zone
-            </span>
-          </div> */}
-        </Html>
-      )}
     </>
   );
 }
@@ -378,7 +372,7 @@ export default function BrainScene(props: BrainSceneProps) {
     <Canvas
       camera={{ position: [-0.16, 0.1, 0.21], fov: 42, near: 0.005, far: 10 }}
       gl={{ antialias: true, localClippingEnabled: true, preserveDrawingBuffer: true }}
-      className="w-full h-full"
+      className="w-full h-full touch-none"
     >
       <color attach="background" args={["#030712"]} />
 
@@ -390,10 +384,10 @@ export default function BrainScene(props: BrainSceneProps) {
       <Suspense
         fallback={
           <Html center>
-            <div className="flex flex-col items-center gap-3 bg-slate-900/90 border border-cyan-500/40 px-6 py-4 rounded-2xl shadow-2xl">
-              <div className="w-7 h-7 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
+            <div className="flex flex-col items-center gap-3 bg-slate-900/90 border border-cyan-500/40 px-5 py-3.5 rounded-2xl shadow-2xl whitespace-nowrap">
+              <div className="w-6 h-6 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
               <div className="text-xs font-mono text-cyan-300 tracking-wider uppercase">
-                Loading Patient 3D GLB...
+                Loading 3D Mesh...
               </div>
             </div>
           </Html>
