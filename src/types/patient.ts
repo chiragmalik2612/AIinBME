@@ -18,20 +18,24 @@ export interface MeshTelemetry {
   hotspotDimensionsMm: [number, number, number];
   hotspotCentroidMm: [number, number, number];
   estimatedHotspotVolumeCm3: number;
+  hotspotVolumeRatioPercent?: number;
+  detectedHemisphere?: string;
+  detectedAnatomicalRegion?: string;
 }
 
 export interface PatientRecord {
   id: string;
   code: string;
   name: string;
-  age: number;
-  sex: "M" | "F";
-  epilepsyType: string;
-  seizureOnsetZone: string;
-  hemisphere: "Left Hemisphere" | "Right Hemisphere" | "Bilateral";
-  confidence: number;
-  mriStatus: string;
-  eegConcordance: string;
+  folderName?: string;
   modelUrl: string;
-  clinicalNotes: string;
+  age?: number;
+  sex?: "M" | "F";
+  epilepsyType?: string;
+  seizureOnsetZone?: string;
+  hemisphere?: "Left Hemisphere" | "Right Hemisphere" | "Bilateral";
+  confidence?: number;
+  mriStatus?: string;
+  eegConcordance?: string;
+  clinicalNotes?: string;
 }

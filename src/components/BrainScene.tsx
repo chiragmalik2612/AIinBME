@@ -20,7 +20,7 @@ interface BrainSceneProps {
   showGrid: boolean;
   cameraPreset: CameraPreset;
   sliceAxis: SliceAxis;
-  slicePosition: number; // -1 to 1 normalized
+  slicePosition: number;
   cortexColor: string;
   hotspotColor: string;
   onTelemetryComputed: (telemetry: MeshTelemetry) => void;
@@ -64,7 +64,13 @@ function CameraRig({
         break;
       case "hotspot_focus":
         target.copy(hotspotLocalCenter);
-        pos.copy(hotspotLocalCenter).add(new THREE.Vector3(-0.11, 0.05, 0.11));
+        pos.copy(hotspotLocalCenter).add(
+          new THREE.Vector3(
+            hotspotLocalCenter.x <= 0 ? -0.11 : 0.11,
+            0.05,
+            0.11
+          )
+        );
         break;
       default:
         pos.set(-0.16, 0.1, 0.21);
@@ -107,10 +113,7 @@ function BrainMeshGroup({
   );
   const [maxHalfExtent, setMaxHalfExtent] = useState<number>(0.09);
 
-  // Clone scene so materials and geometries are isolated per load
   const clonedScene = useMemo(() => scene.clone(true), [scene]);
-
-  // Create surgical clipping plane for Brain_Cortex
   const clippingPlane = useMemo(() => new THREE.Plane(new THREE.Vector3(0, -1, 0), 1), []);
 
   useEffect(() => {
@@ -128,7 +131,6 @@ function BrainMeshGroup({
     }
   }, [sliceAxis, slicePosition, maxHalfExtent, clippingPlane]);
 
-  // Extract telemetry, compute missing normals, and center scene on first load
   useEffect(() => {
     let cortexVerts = 0;
     let cortexTris = 0;
@@ -145,7 +147,6 @@ function BrainMeshGroup({
         const mesh = child as THREE.Mesh;
         const geom = mesh.geometry;
 
-        // Compute missing vertex normals from Trimesh export
         if (!geom.attributes.normal) {
           geom.computeVertexNormals();
         }
@@ -188,7 +189,6 @@ function BrainMeshGroup({
       hotspotBox.getCenter(hotspotCenter);
     }
 
-    // Offset so the brain cortex is centered at [0, 0, 0]
     setSceneOffset(overallCenter.clone().negate());
     const localHotspot = hotspotCenter.clone().sub(overallCenter);
     setHotspotPinPos(localHotspot);
@@ -196,15 +196,49 @@ function BrainMeshGroup({
     const halfMax = Math.max(cortexSize.x, cortexSize.y, cortexSize.z) * 0.55;
     if (halfMax > 0) setMaxHalfExtent(halfMax);
 
-    // Approximate ellipsoidal volume of the seizure zone in cm^3
-    const volMeters3 =
+    const hotspotVolCm3 =
       (4 / 3) *
       Math.PI *
       (hotspotSize.x / 2) *
       (hotspotSize.y / 2) *
       (hotspotSize.z / 2) *
-      0.68; // cortical packing factor
-    const volCm3 = volMeters3 * 1_000_000;
+      0.68 *
+      1_000_000;
+
+    const cortexVolCm3 =
+      (4 / 3) *
+      Math.PI *
+      (cortexSize.x / 2) *
+      (cortexSize.y / 2) *
+      (cortexSize.z / 2) *
+      0.68 *
+      1_000_000;
+
+    const ratioPercent =
+      cortexVolCm3 > 0 ? Math.min(100, (hotspotVolCm3 / cortexVolCm3) * 100) : 0;
+
+    const detectedHemisphere =
+      Math.abs(localHotspot.x) < 0.008
+        ? "Midline / Bilateral"
+        : localHotspot.x < 0
+        ? "Left Hemisphere"
+        : "Right Hemisphere";
+
+    const antPost =
+      localHotspot.z > 0.015
+        ? "Fronto-Anterior"
+        : localHotspot.z < -0.015
+        ? "Parieto-Occipital"
+        : "Central / Temporal";
+
+    const supInf =
+      localHotspot.y > 0.01
+        ? "Superior"
+        : localHotspot.y < -0.01
+        ? "Inferior / Basal"
+        : "Lateral";
+
+    const detectedAnatomicalRegion = `${supInf} ${antPost} Cortex`;
 
     onTelemetryComputed({
       cortexVertices: cortexVerts,
@@ -226,11 +260,13 @@ function BrainMeshGroup({
         +(localHotspot.y * 1000).toFixed(1),
         +(localHotspot.z * 1000).toFixed(1),
       ],
-      estimatedHotspotVolumeCm3: +volCm3.toFixed(2),
+      estimatedHotspotVolumeCm3: +hotspotVolCm3.toFixed(2),
+      hotspotVolumeRatioPercent: +ratioPercent.toFixed(1),
+      detectedHemisphere,
+      detectedAnatomicalRegion,
     });
   }, [clonedScene, onTelemetryComputed]);
 
-  // Apply materials reactively when controls change
   useEffect(() => {
     clonedScene.traverse((child) => {
       if ((child as THREE.Mesh).isMesh) {
@@ -268,7 +304,7 @@ function BrainMeshGroup({
             transparent: true,
             opacity: cortexOpacity,
             wireframe: wireframe,
-            depthWrite: false, // Critical so transparent cortex never hides internal seizure zone
+            depthWrite: false,
             side: THREE.DoubleSide,
             clippingPlanes: sliceAxis === "none" ? [] : [clippingPlane],
             clipShadows: true,
@@ -289,7 +325,6 @@ function BrainMeshGroup({
     clippingPlane,
   ]);
 
-  // Sinusoidal pulse animation for presentation impact
   useFrame(({ clock }) => {
     if (hotspotMatRef.current) {
       if (pulseHotspot) {
@@ -313,7 +348,6 @@ function BrainMeshGroup({
         <primitive object={clonedScene} />
       </group>
 
-      {/* Internal point light anchored at seizure zone for realistic sub-cortical illumination */}
       {showHotspot && (
         <pointLight
           position={hotspotPinPos}
@@ -323,13 +357,12 @@ function BrainMeshGroup({
         />
       )}
 
-      {/* 3D Floating Surgical Callout Pin */}
       {showLabels && showHotspot && (
         <Html position={hotspotPinPos} center distanceFactor={0.35} zIndexRange={[20, 0]}>
           <div className="pointer-events-none select-none flex items-center gap-2 bg-slate-950/90 border border-cyan-400/80 text-cyan-200 px-2.5 py-1 rounded-full shadow-[0_0_20px_rgba(0,224,255,0.45)] backdrop-blur-md whitespace-nowrap">
             <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
             <span className="text-[11px] font-semibold tracking-wide">
-              Epileptogenic Zone (EZ)
+              Predicted Seizure Zone
             </span>
           </div>
         </Html>
@@ -349,7 +382,6 @@ export default function BrainScene(props: BrainSceneProps) {
     >
       <color attach="background" args={["#030712"]} />
 
-      {/* Studio Medical Lighting */}
       <ambientLight intensity={0.75} />
       <directionalLight position={[1.5, 2, 1.5]} intensity={1.6} color="#f8fafc" />
       <directionalLight position={[-1.5, -1, -1]} intensity={0.7} color="#38bdf8" />
@@ -361,7 +393,7 @@ export default function BrainScene(props: BrainSceneProps) {
             <div className="flex flex-col items-center gap-3 bg-slate-900/90 border border-cyan-500/40 px-6 py-4 rounded-2xl shadow-2xl">
               <div className="w-7 h-7 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
               <div className="text-xs font-mono text-cyan-300 tracking-wider uppercase">
-                Reconstructing 3D Cortical Mesh...
+                Loading Patient 3D GLB...
               </div>
             </div>
           </Html>
@@ -371,7 +403,6 @@ export default function BrainScene(props: BrainSceneProps) {
         <Environment preset="city" />
       </Suspense>
 
-      {/* Stereotactic Reference Floor Grid */}
       {props.showGrid && (
         <Grid
           position={[0, -0.075, 0]}
